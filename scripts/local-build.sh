@@ -673,6 +673,31 @@ patch_mtk_hnat_local_dest() {
     die "MTK HNAT local-destination guard patch verification failed"
 }
 
+patch_h5000m_pcie1_slot() {
+  local patch_file="$ROOT_DIR/patches/h5000m-pcie1-enable.patch"
+  local dts_file="target/linux/mediatek/dts/mt7987a-hiveton-h5000m.dts"
+
+  [ -f "$patch_file" ] || return 0
+  [ -f "$dts_file" ] || { log "WARNING: $dts_file not found; skipping PCIe1 slot patch"; return 0; }
+
+  if grep -q 'pcie1_pins_nowake' "$dts_file"; then
+    log "H5000M PCIe1 slot patch already applied"
+    return 0
+  fi
+
+  if patch -p1 --forward --dry-run < "$patch_file" >/dev/null 2>&1; then
+    log "Applying H5000M PCIe1 slot patch (enable pcie1 with a wake-free pinmux)"
+    patch -p1 < "$patch_file"
+  elif patch -p1 --reverse --dry-run < "$patch_file" >/dev/null 2>&1; then
+    log "H5000M PCIe1 slot patch already applied"
+  else
+    die "Unable to apply H5000M PCIe1 slot patch (upstream DTS changed?)"
+  fi
+
+  grep -q 'pcie1_pins_nowake' "$dts_file" || \
+    die "H5000M PCIe1 slot patch verification failed"
+}
+
 # QModem upstream Makefiles reference several kmod packages that are NOT
 # present in immortalwrt-24.10's main repository:
 #   - kmod-mhi-wwan, kmod-mhi-wwan-ctrl, kmod-mhi-wwan-mbim (Qualcomm MHI WWAN stack)
@@ -1049,6 +1074,7 @@ apply_package_fixes() {
   patch_mtwifi_apcli_bssid_budget
   verify_mtwifi_patch
   patch_mtk_hnat_local_dest
+  patch_h5000m_pcie1_slot
   patch_mtwifi7_sta_mgmt_assoc_hostapd_guard
   ensure_external_luci_i18n_packages
   if is_true "$ENABLE_QMODEM"; then
