@@ -1,27 +1,29 @@
-patch_h5000m_pcie1_slot() {
-  local patch_file="$ROOT_DIR/patches/h5000m-pcie1-enable.patch"
-  local dts_file="target/linux/mediatek/dts/mt7987a-hiveton-h5000m.dts"
-
-  [ -f "$patch_file" ] || return 0
-  [ -f "$dts_file" ] || { log "WARNING: $dts_file not found; skipping PCIe1 slot patch"; return 0; }
-
-  if grep -q 'pcie1_pins_nowake' "$dts_file"; then
-    log "H5000M PCIe1 slot patch already applied"
-    return 0
-  fi
-
-  if patch -p1 --forward --dry-run < "$patch_file" >/dev/null 2>&1; then
-    log "Applying H5000M PCIe1 slot patch (enable pcie1 with a wake-free pinmux)"
-    patch -p1 < "$patch_file"
-  elif patch -p1 --reverse --dry-run < "$patch_file" >/dev/null 2>&1; then
-    log "H5000M PCIe1 slot patch already applied"
-  else
-    die "Unable to apply H5000M PCIe1 slot patch (upstream DTS changed?)"
-  fi
-
-  grep -q 'pcie1_pins_nowake' "$dts_file" || \
-    die "H5000M PCIe1 slot patch verification failed"
-  [ "$(tail -n 1 "$dts_file")" = "};" ] || \
-    die "H5000M PCIe1 slot patch left the DTS truncated (bad hunk line count?)"
-}
-
+diff --git a/target/linux/mediatek/dts/mt7987a-hiveton-h5000m.dts b/target/linux/mediatek/dts/mt7987a-hiveton-h5000m.dts
+--- a/target/linux/mediatek/dts/mt7987a-hiveton-h5000m.dts
++++ b/target/linux/mediatek/dts/mt7987a-hiveton-h5000m.dts
+@@ -81,3 +81,25 @@
+ 		};
+ 	};
+ };
++
++/*
++ * M.2 B-key slot (5G modem) is on PCIe port 1.  mt7987a.dtsi uses pin 38
++ * (PCIE_WAKE_N_1) as &pcie0's wifi-reset-gpios, but the stock pcie1_pins
++ * mux group still claims that same pin, so enabling &pcie1 as-is collides
++ * and the controller never probes.  Use a board-local pinmux without
++ * pcie1_wake; PCIe WAKE# is only needed for D3cold remote wakeup.
++ */
++&pio {
++	pcie1_pins_nowake: pcie1-pins-nowake {
++		mux {
++			function = "pcie";
++			groups = "pcie1_pereset", "pcie1_clkreq";
++		};
++	};
++};
++
++&pcie1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pcie1_pins_nowake>;
++	status = "okay";
++};
