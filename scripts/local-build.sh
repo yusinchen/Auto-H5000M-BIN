@@ -696,6 +696,8 @@ patch_h5000m_pcie1_slot() {
 
   grep -q 'pcie1_pins_nowake' "$dts_file" || \
     die "H5000M PCIe1 slot patch verification failed"
+  [ "$(tail -n 1 "$dts_file")" = "};" ] || \
+    die "H5000M PCIe1 slot patch left the DTS truncated (bad hunk line count?)"
 }
 
 # QModem upstream Makefiles reference several kmod packages that are NOT
